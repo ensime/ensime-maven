@@ -8,6 +8,6 @@ build:
   commands:
     - git log | head -n 20
     - mvn clean install -Dgpg.skip=true
-    - if [ "$CI_BRANCH" = "master" ] ; then
+    - if [ "$CIRCLE_BRANCH" = "master" ] ; then
         mvn deploy -s .settings.xml -Dgpg.skip=true;
       fi
