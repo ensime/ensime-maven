@@ -95,7 +95,7 @@ class ConfigGenerator(
     }.toList.flatten
   }
 
-/**
+  /**
    * Get the javacOptions for this project.
    * @return A list containing the javacOptions
    * @author amanjpro
