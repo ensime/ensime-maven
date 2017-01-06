@@ -29,10 +29,12 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
 
 /**
  * Generates ENSIME configuration files.
- * 
+ *
  * @author ueshin
  */
 @Mojo(name = "generate", requiresProject = true, requiresDependencyResolution = ResolutionScope.TEST, aggregator = true)
@@ -45,6 +47,12 @@ public class GenerateMojo extends AbstractMojo {
      */
     @Component
     protected MavenProject project;
+
+    @Parameter(defaultValue = "${repositorySystemSession}")
+    private RepositorySystemSession session;
+
+    @Component
+    private RepositorySystem repoSystem;
 
     /**
      * The formatter preferences
@@ -81,7 +89,8 @@ public class GenerateMojo extends AbstractMojo {
             }
         }
 
-        ConfigGenerator generator = new ConfigGenerator(project, properties);
+        ConfigGenerator generator = new ConfigGenerator(project,
+            repoSystem, session, properties);
         generator.generate(new File(project.getBasedir(), DOT_ENSIME));
     }
 }

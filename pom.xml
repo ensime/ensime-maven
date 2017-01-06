@@ -42,14 +42,14 @@
   </issueManagement>
 
   <distributionManagement>
-	<snapshotRepository>
+    <snapshotRepository>
       <id>sonatype-nexus-snapshots</id>
       <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-	</snapshotRepository>
-	<repository>
+    </snapshotRepository>
+    <repository>
       <id>sonatype-nexus</id>
       <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-	</repository>
+    </repository>
   </distributionManagement>
 
   <properties>
@@ -149,19 +149,19 @@
           </execution>
         </executions>
       </plugin>
-	  <plugin>
-		<groupId>org.apache.maven.plugins</groupId>
-		<artifactId>maven-gpg-plugin</artifactId>
-		<version>1.5</version>
-		<executions>
+        <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>1.5</version>
+        <executions>
           <execution>
-			<id>sign-artifacts</id>
-			<phase>verify</phase>
-			<goals>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals>
               <goal>sign</goal>
-			</goals>
+            </goals>
           </execution>
-		</executions>
+        </executions>
       </plugin>
     </plugins>
     <pluginManagement>
@@ -342,6 +342,16 @@
       <artifactId>maven-plugin-api</artifactId>
     </dependency>
     <dependency>
+        <groupId>org.eclipse.aether</groupId>
+        <artifactId>aether-api</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.eclipse.aether</groupId>
+        <artifactId>aether-util</artifactId>
+    </dependency>
+
+
+    <dependency>
       <groupId>org.apache.maven.plugin-tools</groupId>
       <artifactId>maven-plugin-annotations</artifactId>
     </dependency>
@@ -366,8 +376,7 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
     </dependency>
-
-  </dependencies>
+    </dependencies>
 
   <dependencyManagement>
     <dependencies>
@@ -394,6 +403,17 @@
         <version>3.1</version>
         <scope>provided</scope>
       </dependency>
+      <dependency>
+          <groupId>org.eclipse.aether</groupId>
+          <artifactId>aether-api</artifactId>
+          <version>1.1.0</version>
+      </dependency>
+      <dependency>
+          <groupId>org.eclipse.aether</groupId>
+          <artifactId>aether-util</artifactId>
+          <version>1.1.0</version>
+      </dependency>
+
 
       <dependency>
         <groupId>org.scala-lang</groupId>

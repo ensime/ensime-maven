@@ -30,10 +30,16 @@ import scalax.io.JavaConverters._
 import org.codehaus.plexus.util.xml.Xpp3Dom
 import org.apache.maven.artifact.Artifact
 import org.apache.maven.project.MavenProject
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.artifact.DefaultArtifact
+import org.eclipse.aether.resolution.ArtifactRequest
+import org.eclipse.aether.repository.RemoteRepository
+import org.eclipse.aether.resolution.ArtifactResolutionException
 import org.apache.maven.model.Plugin
-import org.ensime.maven.plugins.ensime.model.Project
+import org.apache.maven.model.Repository
 import collection.JavaConverters._
-import org.ensime.maven.plugins.ensime.model.SubProject
+import org.ensime.maven.plugins.ensime.model._
 import org.ensime.maven.plugins.ensime.sexpr.SExpr
 import org.ensime.maven.plugins.ensime.sexpr.SExprEmitter
 import org.ensime.maven.plugins.ensime.model.FormatterPreferences
@@ -44,11 +50,37 @@ import org.ensime.maven.plugins.ensime.model.FormatterPreferences
  */
 class ConfigGenerator(
     val project: MavenProject,
+    val repoSystem: RepositorySystem,
+    val session: RepositorySystemSession,
     val properties: Properties) {
+
+  private val remoteRepositories = {
+    val repos = project.getRepositories
+      .asInstanceOf[JList[Repository]].asScala.toList
+    repoSystem.newResolutionRepositories(session,
+      repos.map(r =>
+        new RemoteRepository.Builder(r.getId, "default", r.getUrl).build))
+  }
+
+  private val SCALA_MAVEN_PLUGIN_GROUP_ID =
+    "net.alchim31.maven"
+  private val SCALA_MAVEN_PLUGIN_ARTIFACT_ID =
+    "scala-maven-plugin"
+
+  private val JAVA_MAVEN_PLUGIN_GROUP_ID =
+    "org.apache.maven.plugins"
+  private val JAVA_MAVEN_PLUGIN_ARTIFACT_ID =
+    "maven-compiler-plugin"
+
+  private val SCALA_MAVEN_PLUGIN =
+    s"${SCALA_MAVEN_PLUGIN_GROUP_ID}:${SCALA_MAVEN_PLUGIN_ARTIFACT_ID}"
+
+  private val JAVA_MAVEN_PLUGIN =
+    s"${JAVA_MAVEN_PLUGIN_GROUP_ID}:${JAVA_MAVEN_PLUGIN_ARTIFACT_ID}"
 
   val jarPattern = "\\.jar$".r
 
-  def getJavaHome(): String = {
+  def getJavaHome(): File = {
     List(
       // manual
       sys.env.get("JDK_HOME"),
@@ -57,12 +89,33 @@ class ConfigGenerator(
       sys.props.get("java.home").map(new File(_).getParent),
       sys.props.get("java.home"),
       // osx
-      Try("/usr/libexec/java_home".!!.trim).toOption).flatten.filter { n =>
-        new File(n + "/lib/tools.jar").exists
+      Try("/usr/libexec/java_home".!!.trim).toOption).flatten.flatMap { n =>
+        val f = new File(n + "/lib/tools.jar")
+        if (f.exists)
+          List(f)
+        else Nil
       }.headOption.getOrElse(
         throw new FileNotFoundException(
           """Could not automatically find the JDK/lib/tools.jar.
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin))
+  }
+
+  def resolveScalaJars(org: String, version: String): Set[File] = {
+    val artifact = (s: String) => new DefaultArtifact(org, s, "jar", version)
+    val artifactRequest = (art: DefaultArtifact) =>
+      new ArtifactRequest(art, remoteRepositories, null)
+
+    val resolve = (s: String) => {
+      val art = artifact(s)
+      repoSystem.resolveArtifact(session,
+        artifactRequest(art)).getArtifact.getFile
+    }
+
+    Set(
+      resolve("scalap"),
+      resolve("scala-compiler"),
+      resolve("scala-reflect"),
+      resolve("scala-library"))
   }
 
   /**
@@ -79,6 +132,22 @@ class ConfigGenerator(
   }
 
   /**
+   * Get the Scala organization for this project.
+   * @return String containing the scala organization
+   * @author amanjpro
+   */
+  def getScalaOrganization(): String = {
+    val scalacPlugin =
+      project.getPluginManagement().getPluginsAsMap
+        .asInstanceOf[JMap[String, Plugin]]
+        .get(SCALA_MAVEN_PLUGIN)
+    Option(scalacPlugin).map(_.getConfiguration).flatMap {
+      case config: Xpp3Dom =>
+        Option(config.getChild("scalaOrganization")).map(_.getValue)
+    }.getOrElse("org.scala-lang")
+  }
+
+  /**
    * Get the scalacOptions for this project.
    * @return A list containing the scalacOptions
    * @author amanjpro
@@ -87,7 +156,7 @@ class ConfigGenerator(
     val scalacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
-        .get("net.alchim31.maven:scala-maven-plugin")
+        .get(SCALA_MAVEN_PLUGIN)
     Option(scalacPlugin).map(_.getConfiguration).flatMap {
       case config: Xpp3Dom =>
         Option(config.getChild("args"))
@@ -104,7 +173,7 @@ class ConfigGenerator(
     val javacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
-        .get("org.apache.maven.plugins:maven-compiler-plugin")
+        .get(JAVA_MAVEN_PLUGIN)
     Option(javacPlugin).map(_.getConfiguration).flatMap {
       case config: Xpp3Dom =>
         Option(config.getChild("compilerArgs"))
