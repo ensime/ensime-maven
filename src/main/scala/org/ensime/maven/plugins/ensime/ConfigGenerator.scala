@@ -21,14 +21,18 @@ import java.nio.file.Paths
 import java.util.{ List => JList }
 import java.util.Properties
 import java.util.{ Set => JSet }
+import java.util.{ Map => JMap }
 import scala.collection.JavaConversions._
 import scala.collection.immutable.ListSet
 import scala.sys.process._
 import scala.util._
 import scalax.io.JavaConverters._
+import org.codehaus.plexus.util.xml.Xpp3Dom
 import org.apache.maven.artifact.Artifact
 import org.apache.maven.project.MavenProject
+import org.apache.maven.model.Plugin
 import org.ensime.maven.plugins.ensime.model.Project
+import collection.JavaConverters._
 import org.ensime.maven.plugins.ensime.model.SubProject
 import org.ensime.maven.plugins.ensime.sexpr.SExpr
 import org.ensime.maven.plugins.ensime.sexpr.SExprEmitter
@@ -72,6 +76,23 @@ class ConfigGenerator(
       case Some(flags) => parser.JavaFlagsParser(flags)
       case _           => List()
     }
+  }
+
+  /**
+   * Get the scalacOptions for this project.
+   * @return A list containing the scalacOptions
+   * @author amanjpro
+   */
+  def getScalacOptions(): List[String] = {
+    val scalacPlugin =
+      project.getPluginManagement().getPluginsAsMap
+        .asInstanceOf[JMap[String, Plugin]]
+        .get("net.alchim31.maven:scala-maven-plugin")
+    Option(scalacPlugin).map(_.getConfiguration).flatMap {
+      case config: Xpp3Dom =>
+        Option(config.getChild("args"))
+          .map(_.getChildren.toList.map(_.getValue))
+    }.toList.flatten
   }
 
   /**
