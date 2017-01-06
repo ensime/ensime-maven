@@ -95,6 +95,25 @@ class ConfigGenerator(
     }.toList.flatten
   }
 
+/**
+   * Get the javacOptions for this project.
+   * @return A list containing the javacOptions
+   * @author amanjpro
+   */
+  def getJavacOptions(): List[String] = {
+    val javacPlugin =
+      project.getPluginManagement().getPluginsAsMap
+        .asInstanceOf[JMap[String, Plugin]]
+        .get("org.apache.maven.plugins:maven-compiler-plugin")
+    Option(javacPlugin).map(_.getConfiguration).flatMap {
+      case config: Xpp3Dom =>
+        Option(config.getChild("compilerArgs"))
+          .map(_.getChildren.toList.map(_.getValue))
+    }.toList.flatten
+  }
+
+
+
   /**
    * Get the scala-version for this project.  Uses scala.version as the key.
    * If you want a blue shed, get out a can of paint :)
