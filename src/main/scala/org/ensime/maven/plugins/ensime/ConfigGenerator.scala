@@ -43,6 +43,7 @@ import org.ensime.maven.plugins.ensime.model._
 import org.ensime.maven.plugins.ensime.sexpr.SExpr
 import org.ensime.maven.plugins.ensime.sexpr.SExprEmitter
 import org.ensime.maven.plugins.ensime.model.FormatterPreferences
+import scala.util.Properties.{ versionNumberString => systemScalaVersion }
 
 /**
  * Represents an ENSIME configuration file generator.
@@ -100,23 +101,22 @@ class ConfigGenerator(
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin))
   }
 
-  def resolveScalaJars(org: String, version: String): Set[File] = {
-    val artifact = (s: String) => new DefaultArtifact(org, s, "jar", version)
-    val artifactRequest = (art: DefaultArtifact) =>
-      new ArtifactRequest(art, remoteRepositories, null)
+  private def artifact(groupId: String, artifactId: String, version: String) =
+    new DefaultArtifact(groupId, artifactId, "jar", version)
 
-    val resolve = (s: String) => {
-      val art = artifact(s)
-      repoSystem.resolveArtifact(session,
-        artifactRequest(art)).getArtifact.getFile
-    }
+  private def artifactRequest(art: DefaultArtifact) =
+    new ArtifactRequest(art, remoteRepositories, null)
 
+  private def resolve(art: DefaultArtifact) =
+    repoSystem.resolveArtifact(session,
+      artifactRequest(art)).getArtifact.getFile
+
+  def resolveScalaJars(org: String, version: String): Set[File] =
     Set(
-      resolve("scalap"),
-      resolve("scala-compiler"),
-      resolve("scala-reflect"),
-      resolve("scala-library"))
-  }
+      resolve(artifact(org, "scalap", version)),
+      resolve(artifact(org, "scala-compiler", version)),
+      resolve(artifact(org, "scala-library", version)),
+      resolve(artifact(org, "scala-reflect", version)))
 
   /**
    * Get java-flags from environment variable `ENSIME_JAVA_FLAGS` .
