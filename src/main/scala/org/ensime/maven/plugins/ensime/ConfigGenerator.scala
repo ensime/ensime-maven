@@ -148,6 +148,26 @@ class ConfigGenerator(
       resolve(artifact("org.ensime", s"server_$scala", ensimeServerVersion))
   }
 
+  private def ensimeProjectsToModule(p: Iterable[EnsimeProject]): EnsimeModule = {
+    val name = p.head.id.project
+    val deps = for {
+      s <- p
+      d <- s.depends
+    } yield d.project
+    val (mains, tests) = p.toSet.partition(_.id.config == "compile")
+    val mainSources = mains.flatMap(_.sources)
+    val mainTargets = mains.flatMap(_.targets)
+    val mainJars = mains.flatMap(_.libraryJars)
+    val testSources = tests.flatMap(_.sources)
+    val testTargets = tests.flatMap(_.targets)
+    val testJars = tests.flatMap(_.libraryJars).toSet -- mainJars
+    val sourceJars = p.flatMap(_.librarySources).toSet
+    val docJars = p.flatMap(_.libraryDocs).toSet
+    new EnsimeModule(
+      name, mainSources, testSources, mainTargets, testTargets, deps.toSet,
+      mainJars, Set.empty, testJars, sourceJars, docJars)
+  }
+
   def getScalaJars() =
     resolveScalaJars(getScalaOrganization, getScalaVersion)
 
@@ -216,8 +236,6 @@ class ConfigGenerator(
           .map(_.getChildren.toList.map(_.getValue))
     }.toList.flatten
   }
-
-
 
   /**
    * Get the scala-version for this project.  Uses scala.version as the key.
@@ -340,8 +358,13 @@ class ConfigGenerator(
     }
 
     val projectDir = project.getBasedir().toPath().toAbsolutePath().toString()
-    val cacheDir = projectDir + "/.ensime_cache"
-    val emitter = new SExprEmitter(Project(project.getName(), projectDir, cacheDir, getScalaVersion(), getJavaHome(), getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
+    val cacheDir = new File(projectDir + "/.ensime_cache")
+    val config = new EnsimeConfig(project.getBasedir, cacheDir,
+      getScalaJars, getEnsimeServerJars, project.getName,
+      getScalaVersion(),
+      getScalacOptions(), Map.empty, getJavaHome(),
+      getEnsimeJavaFlags(), getJavacOptions(), Set.empty, Nil)
+    val emitter = new SExprEmitter(Project(project.getName, projectDir, cacheDir.toString, getScalaVersion(), getJavaHome().toString, getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
     emitter.emit(new FileOutputStream(out).asOutput)
   }
 }
