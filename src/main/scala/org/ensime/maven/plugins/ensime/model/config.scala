@@ -22,15 +22,13 @@ import org.ensime.maven.plugins.ensime.sexpr.SList
 import org.ensime.maven.plugins.ensime.sexpr.SKeyword
 import java.io.File
 
-
 /**
  * Represents ENSIME projectId.
  * @author amanjpro
  */
 class EnsimeProjectId(
   val project: String,
-  val config: String
-)
+  val config: String)
 
 /**
  * A companion object for {@link EnsimeProjectId}.
@@ -45,7 +43,7 @@ object EnsimeProjectId {
 
     override def as(projectId: EnsimeProjectId) = {
       SMap(Seq(
-        (SKeyword("id") -> SString(projectId.project)),
+        (SKeyword("project") -> SString(projectId.project)),
         (SKeyword("config") -> SString(projectId.config))))
     }
   }
@@ -64,8 +62,7 @@ class EnsimeProject(
   val javacOptions: List[String],
   val libraryJars: Set[File],
   val librarySources: Set[File],
-  val libraryDocs: Set[File]
-)
+  val libraryDocs: Set[File])
 
 /**
  * A companion object for {@link EnsimeProject}.
@@ -103,19 +100,20 @@ object EnsimeProject {
  * @author amanjpro
  */
 class EnsimeModule(
-  val name: String,
-  val mainRoots: Set[File],
-  val testRoots: Set[File],
-  val targets: Set[File],
-  val testTargets: Set[File],
-  val dependsOnNames: Set[String],
-  val compileJars: Set[File],
-  val runtimeJars: Set[File],
-  val testJars: Set[File],
-  val sourceJars: Set[File],
-  val docJars: Set[File],
-  val dependencies: Set[EnsimeModule]
-)
+    val name: String,
+    val mainRoots: Set[File],
+    val testRoots: Set[File],
+    val targets: Set[File],
+    val testTargets: Set[File],
+    val dependsOnNames: Set[String],
+    val compileJars: Set[File],
+    val runtimeJars: Set[File],
+    val testJars: Set[File],
+    val sourceJars: Set[File],
+    val docJars: Set[File]) {
+  def dependencies(implicit lookup: String => EnsimeModule): Set[EnsimeModule] =
+    dependsOnNames map lookup
+}
 /**
  * A companion object for {@link EnsimeModule}.
  * @author amanjpro
@@ -130,26 +128,23 @@ object EnsimeModule {
     override def as(module: EnsimeModule) = {
       SMap(Seq(
         (SKeyword("name") -> SString(module.name)),
-        (SKeyword("mainRoots") -> SList(module.mainRoots.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("testRoots") -> SList(module.testRoots.map(f => SString(f.getAbsolutePath)).toSeq)),
+        (SKeyword("source-roots") -> SList((module.mainRoots ++ module.testRoots).map(f => SString(f.getAbsolutePath)).toSeq)),
         (SKeyword("targets") -> SList(module.targets.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("testTargets") ->
+        (SKeyword("test-targets") ->
           SList(module.testTargets.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("dependsOnNames") ->
+        (SKeyword("depends-on-modules") ->
           SList(module.dependsOnNames.map(SString).toSeq)),
-        (SKeyword("compileJars") ->
+        (SKeyword("compile-deps") ->
           SList(module.compileJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("runtimeJars") ->
+        (SKeyword("runtime-deps") ->
           SList(module.runtimeJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("testJars") ->
+        (SKeyword("test-deps") ->
           SList(module.testJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("sourceJars") ->
-          SList(module.sourceJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("docJars") ->
+        (SKeyword("doc-jars") ->
           SList(module.docJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("dependencies") ->
-          SList(module.dependencies.map(as).toSeq))))
-      }
+        (SKeyword("reference-source-roots") ->
+          SList(module.sourceJars.map(f => SString(f.getAbsolutePath)).toSeq))))
+    }
   }
 }
 
@@ -170,8 +165,7 @@ class EnsimeConfig(
   val javaFlags: List[String],
   val javacOptions: List[String], // 1.0
   val javaSrc: Set[File],
-  val projects: Seq[EnsimeProject]
-)
+  val projects: Seq[EnsimeProject])
 
 /**
  * A companion object for {@link EnsimeConfig}.
@@ -189,20 +183,19 @@ object EnsimeConfig {
     override def as(config: EnsimeConfig) = {
       SMap(Seq(
         (SKeyword("root") -> SString(config.root.getAbsolutePath)),
-        (SKeyword("cacheDir") -> SString(config.cacheDir.getAbsolutePath)),
-        (SKeyword("scalaCompilerJars") ->
+        (SKeyword("cache-dir") -> SString(config.cacheDir.getAbsolutePath)),
+        (SKeyword("scala-compiler-jars") ->
           SList(config.scalaCompilerJars.map(f => SString(f.getAbsolutePath)).toSeq)),
-        (SKeyword("ensimeServerJars") ->
+        (SKeyword("ensime-server-jars") ->
           SList(config.ensimeServerJars.map(f => SString(f.getAbsolutePath)).toSeq)),
         (SKeyword("name") -> SString(config.name)),
-        (SKeyword("scalaVersion") -> SString(config.scalaVersion)),
-        (SKeyword("scalacOptions"), SList(config.scalacOptions.map(SString))),
-        (SKeyword("modules") -> SMap(config.modules.map { case (key, value) =>
-          (SKeyword(key), EnsimeModuleAsSExpr.as(value)) }.toSeq)),
-        (SKeyword("javaHome"), SString(config.javaHome.getAbsolutePath)),
-        (SKeyword("javaFlags"), SList(config.javaFlags.map(SString))),
-        (SKeyword("javacOptions"), SList(config.javacOptions.map(SString))),
-        (SKeyword("javaSrc"), SList(config.javaSrc.map(f => SString(f.getAbsolutePath)).toSeq)),
+        (SKeyword("scala-version") -> SString(config.scalaVersion)),
+        (SKeyword("compier-args"), SList(config.scalacOptions.map(SString))),
+        (SKeyword("subprojects") -> SList(config.modules.values.map(EnsimeModuleAsSExpr.as).toSeq)),
+        (SKeyword("java-home"), SString(config.javaHome.getAbsolutePath)),
+        (SKeyword("java-flags"), SList(config.javaFlags.map(SString))),
+        (SKeyword("java-compiler-args"), SList(config.javacOptions.map(SString))),
+        (SKeyword("java-sources"), SList(config.javaSrc.map(f => SString(f.getAbsolutePath)).toSeq)),
         (SKeyword("projects"), SList(config.projects.map(EnsimeProjectAsSExpr.as).toSeq))))
     }
   }
