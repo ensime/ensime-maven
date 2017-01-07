@@ -208,7 +208,7 @@ class ConfigGenerator(
    * @return A list containing the scalacOptions
    * @author amanjpro
    */
-  def getScalacOptions(): List[String] = {
+  def getScalacOptions(project: MavenProject): List[String] = {
     val scalacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
@@ -225,7 +225,7 @@ class ConfigGenerator(
    * @return A list containing the javacOptions
    * @author amanjpro
    */
-  def getJavacOptions(): List[String] = {
+  def getJavacOptions(project: MavenProject): List[String] = {
     val javacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
@@ -362,8 +362,8 @@ class ConfigGenerator(
     val config = new EnsimeConfig(project.getBasedir, cacheDir,
       getScalaJars, getEnsimeServerJars, project.getName,
       getScalaVersion(),
-      getScalacOptions(), Map.empty, getJavaHome(),
-      getEnsimeJavaFlags(), getJavacOptions(), Set.empty, Nil)
+      getScalacOptions(project), Map.empty, getJavaHome(),
+      getEnsimeJavaFlags(), getJavacOptions(project), Set.empty, Nil)
     val emitter = new SExprEmitter(Project(project.getName, projectDir, cacheDir.toString, getScalaVersion(), getJavaHome().toString, getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
     emitter.emit(new FileOutputStream(out).asOutput)
   }
