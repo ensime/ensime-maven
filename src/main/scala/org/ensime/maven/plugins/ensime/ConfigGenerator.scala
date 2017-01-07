@@ -34,8 +34,12 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.artifact.DefaultArtifact
 import org.eclipse.aether.resolution.ArtifactRequest
-import org.eclipse.aether.repository.RemoteRepository
+import org.eclipse.aether.resolution.ArtifactResult
+import org.eclipse.aether.resolution.DependencyRequest
 import org.eclipse.aether.resolution.ArtifactResolutionException
+import org.eclipse.aether.collection.CollectRequest
+import org.eclipse.aether.graph.Dependency
+import org.eclipse.aether.repository.RemoteRepository
 import org.apache.maven.model.Plugin
 import org.apache.maven.model.Repository
 import collection.JavaConverters._
@@ -79,6 +83,8 @@ class ConfigGenerator(
   private val JAVA_MAVEN_PLUGIN =
     s"${JAVA_MAVEN_PLUGIN_GROUP_ID}:${JAVA_MAVEN_PLUGIN_ARTIFACT_ID}"
 
+  private val ensimeServerVersion = "1.0.0"
+
   val jarPattern = "\\.jar$".r
 
   def getJavaHome(): File = {
@@ -111,12 +117,42 @@ class ConfigGenerator(
     repoSystem.resolveArtifact(session,
       artifactRequest(art)).getArtifact.getFile
 
-  def resolveScalaJars(org: String, version: String): Set[File] =
+  private def resolveAll(art: DefaultArtifact) = {
+    val dependency = new Dependency(art, "compile")
+
+    val collectRequest = new CollectRequest(dependency, remoteRepositories)
+
+    val node = repoSystem.collectDependencies(session, collectRequest).getRoot()
+
+    val dependencyRequest = new DependencyRequest()
+    dependencyRequest.setRoot(node)
+
+    repoSystem.resolveDependencies(session, dependencyRequest)
+      .getArtifactResults.asInstanceOf[JList[ArtifactResult]]
+      .asScala.map(_.getArtifact.getFile).toSet
+  }
+
+  private def resolveScalaJars(org: String, version: String): Set[File] =
     Set(
       resolve(artifact(org, "scalap", version)),
       resolve(artifact(org, "scala-compiler", version)),
       resolve(artifact(org, "scala-library", version)),
       resolve(artifact(org, "scala-reflect", version)))
+
+  private def resolveEnsimeJars(org: String, ensime: String): Set[File] = {
+    val scala = {
+      val parts = systemScalaVersion.split("\\.")
+      s"${parts(0)}.${parts(1)}"
+    }
+    resolveAll(artifact(org, "scalap", systemScalaVersion)) +
+      resolve(artifact("org.ensime", s"server_$scala", ensimeServerVersion))
+  }
+
+  def getScalaJars() =
+    resolveScalaJars(getScalaOrganization, getScalaVersion)
+
+  def getEnsimeServerJars() =
+    resolveEnsimeJars(getScalaOrganization, ensimeServerVersion)
 
   /**
    * Get java-flags from environment variable `ENSIME_JAVA_FLAGS` .
