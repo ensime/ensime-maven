@@ -182,7 +182,7 @@ object EnsimeConfig {
 
     override def as(config: EnsimeConfig) = {
       SMap(Seq(
-        (SKeyword("root") -> SString(config.root.getAbsolutePath)),
+        (SKeyword("root-dir") -> SString(config.root.getAbsolutePath)),
         (SKeyword("cache-dir") -> SString(config.cacheDir.getAbsolutePath)),
         (SKeyword("scala-compiler-jars") ->
           SList(config.scalaCompilerJars.map(f => SString(f.getAbsolutePath)).toSeq)),
