@@ -62,16 +62,20 @@ class SExprEmitter(val sexpr: SExpr) {
 
   @inline
   private def emitSList(out: Output, list: Seq[SExpr], indent: Int) = {
-    out.write("(")
-    list.headOption.foreach { head =>
-      emitSExpr(out, head, indent + 1)
-      list.tail.foreach { sexpr =>
-        out.write("\n")
-        out.write(" " * (indent + 1))
-        emitSExpr(out, sexpr, indent + 1)
+    if (list.isEmpty) {
+      emitSNil(out)
+    } else {
+      out.write("(")
+      list.headOption.foreach { head =>
+        emitSExpr(out, head, indent + 1)
+        list.tail.foreach { sexpr =>
+          out.write("\n")
+          out.write(" " * (indent + 1))
+          emitSExpr(out, sexpr, indent + 1)
+        }
       }
+      out.write(")")
     }
-    out.write(")")
   }
 
   @inline
