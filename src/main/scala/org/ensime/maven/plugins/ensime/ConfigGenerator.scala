@@ -97,7 +97,7 @@ class ConfigGenerator(
       Try("/usr/libexec/java_home".!!.trim).toOption).flatten.flatMap { n =>
         val f = new File(n + "/lib/tools.jar")
         if (f.exists)
-          List(f)
+          List(new File(n))
         else Nil
       }.headOption.getOrElse(
         throw new FileNotFoundException(
