@@ -409,12 +409,19 @@ class ConfigGenerator(
     val subProjects = getEnsimeProjects
 
     val ensimeModules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
+    val javaSrc = {
+      val file = new File(getJavaHome + File.separator + "src.zip")
+      file match {
+        case f if f.exists => Set(f)
+        case _             => Set.empty[File]
+      }
+    }
 
     val config = EnsimeConfig(project.getBasedir, cacheDir,
       getScalaJars, getEnsimeServerJars, project.getName,
       getScalaVersion(),
       getScalacOptions(project), ensimeModules, getJavaHome(),
-      getEnsimeJavaFlags(), getJavacOptions(project), Set.empty, subProjects)
+      getEnsimeJavaFlags(), getJavacOptions(project), javaSrc, subProjects)
     val emitter = new SExprEmitter(Project(project.getName, projectDir, cacheDir.toString, getScalaVersion(), getJavaHome().toString, getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
     emitter.emit(new FileOutputStream(out).asOutput)
   }
