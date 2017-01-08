@@ -130,6 +130,11 @@ class ConfigGenerator(
       .asScala.map(_.getArtifact.getFile).toSet
   }
 
+  private def partialVersion() = {
+    val parts = systemScalaVersion.split("\\.")
+    (parts(0).toInt, parts(1).toInt)
+  }
+
   private def resolveScalaJars(org: String, version: String): Set[File] =
     Set(
       resolve(artifact(org, "scalap", version)),
@@ -139,8 +144,8 @@ class ConfigGenerator(
 
   private def resolveEnsimeJars(org: String, ensime: String): Set[File] = {
     val scala = {
-      val parts = systemScalaVersion.split("\\.")
-      s"${parts(0)}.${parts(1)}"
+      val (major, minor) = partialVersion
+      s"$major.$minor"
     }
     resolveAll(artifact(org, "scalap", systemScalaVersion)) +
       resolve(artifact("org.ensime", s"server_$scala", ensimeServerVersion))
