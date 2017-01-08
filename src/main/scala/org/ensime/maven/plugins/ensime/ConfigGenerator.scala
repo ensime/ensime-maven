@@ -163,7 +163,7 @@ class ConfigGenerator(
     val testJars = tests.flatMap(_.libraryJars).toSet -- mainJars
     val sourceJars = p.flatMap(_.librarySources).toSet
     val docJars = p.flatMap(_.libraryDocs).toSet
-    new EnsimeModule(
+    EnsimeModule(
       name, mainSources, testSources, mainTargets, testTargets, deps.toSet,
       mainJars, Set.empty, testJars, sourceJars, docJars)
   }

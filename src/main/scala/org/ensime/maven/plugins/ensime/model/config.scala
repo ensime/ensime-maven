@@ -26,7 +26,7 @@ import java.io.File
  * Represents ENSIME projectId.
  * @author amanjpro
  */
-class EnsimeProjectId(
+case class EnsimeProjectId(
   val project: String,
   val config: String)
 
@@ -53,7 +53,7 @@ object EnsimeProjectId {
  * Represents ENSIME project.
  * @author amanjpro
  */
-class EnsimeProject(
+case class EnsimeProject(
   val id: EnsimeProjectId,
   val depends: Seq[EnsimeProjectId],
   val sources: Set[File],
@@ -99,7 +99,7 @@ object EnsimeProject {
  * Represents ENSIME module.
  * @author amanjpro
  */
-class EnsimeModule(
+case class EnsimeModule(
     val name: String,
     val mainRoots: Set[File],
     val testRoots: Set[File],
@@ -152,7 +152,7 @@ object EnsimeModule {
  * Represents ENSIME configuration.
  * @author amanjpro
  */
-class EnsimeConfig(
+case class EnsimeConfig(
   val root: File,
   val cacheDir: File,
   val scalaCompilerJars: Set[File],
