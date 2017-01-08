@@ -184,10 +184,13 @@ class ConfigGenerator(
    * @author parsnips
    */
   def getEnsimeJavaFlags(): List[String] = {
-    Option(System.getenv("ENSIME_JAVA_FLAGS")) match {
+    val providedFlags = Option(System.getenv("ENSIME_JAVA_FLAGS")) match {
       case Some(flags) => parser.JavaFlagsParser(flags)
       case _           => List()
     }
+
+    val suggestedFlags = Seq("-Densime.config=.ensime", "-Densime.exitAfterIndex=true")
+    providedFlags ++ suggestedFlags
   }
 
   /**
