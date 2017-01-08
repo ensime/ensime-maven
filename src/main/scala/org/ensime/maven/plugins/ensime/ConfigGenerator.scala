@@ -265,6 +265,52 @@ class ConfigGenerator(
     scalas.result().toList
   }
 
+  def getEnsimeProjects(): List[EnsimeProject] = {
+    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].toList).filter {
+      project => project.getPackaging != "pom"
+    }
+
+    modules.map { module =>
+      val projectId = EnsimeProjectId(project.getId, project.getDefaultGoal)
+      // This only gets the direct dependencies
+      val dependencyArtifacts = project.getDependencyArtifacts.asInstanceOf[JList[Artifact]].asScala
+      val depends = dependencyArtifacts.map(d => EnsimeProjectId(d.getId, "compile"))
+      val sources = {
+        val compileSources =
+          module.getCompileSourceRoots.asInstanceOf[JList[String]].asScala.toSet
+        val testSources =
+          module.getTestCompileSourceRoots.asInstanceOf[JList[String]].asScala.toSet
+        (compileSources ++ testSources).map(new File(_))
+      }
+      val targets = Set(new File(project.getBuild.getOutputDirectory))
+      val scalacOptions = getScalacOptions(project)
+      val javacOptions = getJavacOptions(project)
+
+      val dependencySet = dependencyArtifacts.toSet
+      val libraryJars = dependencySet.map { art =>
+        val defaultArtifact = new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "jar", art.getVersion)
+        resolve(defaultArtifact)
+      }
+
+      val librarySources = dependencySet.map { art =>
+        val defaultArtifact = new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "sources", "jar", art.getVersion)
+        resolve(defaultArtifact)
+      }
+
+      val libraryDocs = dependencySet.map { art =>
+        val defaultArtifact = new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "javadoc", "jar", art.getVersion)
+        resolve(defaultArtifact)
+      }
+
+      EnsimeProject(projectId, depends, sources, targets,
+        scalacOptions, javacOptions, libraryJars, librarySources,
+        libraryDocs)
+    }
+  }
+
   /**
    * Generates configurations.
    */
@@ -359,11 +405,16 @@ class ConfigGenerator(
 
     val projectDir = project.getBasedir().toPath().toAbsolutePath().toString()
     val cacheDir = new File(projectDir + "/.ensime_cache")
-    val config = new EnsimeConfig(project.getBasedir, cacheDir,
+
+    val subProjects = getEnsimeProjects
+
+    val ensimeModules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
+
+    val config = EnsimeConfig(project.getBasedir, cacheDir,
       getScalaJars, getEnsimeServerJars, project.getName,
       getScalaVersion(),
-      getScalacOptions(project), Map.empty, getJavaHome(),
-      getEnsimeJavaFlags(), getJavacOptions(project), Set.empty, Nil)
+      getScalacOptions(project), ensimeModules, getJavaHome(),
+      getEnsimeJavaFlags(), getJavacOptions(project), Set.empty, subProjects)
     val emitter = new SExprEmitter(Project(project.getName, projectDir, cacheDir.toString, getScalaVersion(), getJavaHome().toString, getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
     emitter.emit(new FileOutputStream(out).asOutput)
   }
