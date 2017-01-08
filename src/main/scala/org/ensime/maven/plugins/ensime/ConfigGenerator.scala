@@ -266,23 +266,16 @@ class ConfigGenerator(
       val scalacOptions = getScalacOptions(project)
       val javacOptions = getJavacOptions(project)
 
-      val libraryJars = dependencyArtifacts.map { art =>
-        val defaultArtifact = new DefaultArtifact(art.getGroupId,
-          art.getArtifactId, "jar", art.getVersion)
-        resolve(defaultArtifact)
-      }
-
-      val librarySources = dependencyArtifacts.map { art =>
-        val defaultArtifact = new DefaultArtifact(art.getGroupId,
-          art.getArtifactId, "sources", "jar", art.getVersion)
-        resolve(defaultArtifact)
-      }
-
-      val libraryDocs = dependencyArtifacts.map { art =>
-        val defaultArtifact = new DefaultArtifact(art.getGroupId,
-          art.getArtifactId, "javadoc", "jar", art.getVersion)
-        resolve(defaultArtifact)
-      }
+      val (libraryJars, librarySources, libraryDocs) =
+        dependencyArtifacts.map { art =>
+          val jarFile = resolve(new DefaultArtifact(art.getGroupId,
+            art.getArtifactId, "jar", art.getVersion))
+          val sourcesFile = resolve(new DefaultArtifact(art.getGroupId,
+            art.getArtifactId, "sources", "jar", art.getVersion))
+          val libraryDocs = resolve(new DefaultArtifact(art.getGroupId,
+            art.getArtifactId, "javadoc", "jar", art.getVersion))
+          (jarFile, sourcesFile, libraryDocs)
+        }.unzip3
 
       EnsimeProject(projectId, depends, sources, targets,
         scalacOptions, javacOptions, libraryJars, librarySources,
