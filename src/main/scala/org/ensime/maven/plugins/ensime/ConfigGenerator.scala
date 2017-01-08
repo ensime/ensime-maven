@@ -219,11 +219,29 @@ class ConfigGenerator(
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
         .get(SCALA_MAVEN_PLUGIN)
-    Option(scalacPlugin).map(_.getConfiguration).flatMap {
+    val providedOptions = Option(scalacPlugin).map(_.getConfiguration).flatMap {
       case config: Xpp3Dom =>
         Option(config.getChild("args"))
           .map(_.getChildren.toList.map(_.getValue))
     }.toList.flatten
+
+    val suggestedOptions = Set(
+      "-feature",
+      "-deprecation",
+      "-Xlint",
+      "-Ywarn-dead-code",
+      "-Ywarn-numeric-widen",
+      "-Xfuture") ++ {
+        partialVersion match {
+          case (2, 10) =>
+            Set("-Ymacro-no-expand")
+          case (2, v) if v >= 11 =>
+            Set("-Ywarn-unused-import", "-Ymacro-expand:discard")
+          case _ => Set.empty
+        }
+      }
+
+    providedOptions ++ suggestedOptions
   }
 
   /**
