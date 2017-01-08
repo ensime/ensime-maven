@@ -271,10 +271,10 @@ class ConfigGenerator(
     }
 
     modules.map { module =>
-      val projectId = EnsimeProjectId(project.getId, project.getDefaultGoal)
+      val projectId = EnsimeProjectId(project.getId, Option(project.getDefaultGoal).getOrElse("compile"))
       // This only gets the direct dependencies
-      val dependencyArtifacts = project.getDependencyArtifacts.asInstanceOf[JList[Artifact]].asScala
-      val depends = dependencyArtifacts.map(d => EnsimeProjectId(d.getId, "compile"))
+      val dependencyArtifacts = project.getDependencyArtifacts.asInstanceOf[JSet[Artifact]].asScala.toSet
+      val depends = dependencyArtifacts.toSeq.map(d => EnsimeProjectId(d.getId, "compile"))
       val sources = {
         val compileSources =
           module.getCompileSourceRoots.asInstanceOf[JList[String]].asScala.toSet
@@ -286,20 +286,19 @@ class ConfigGenerator(
       val scalacOptions = getScalacOptions(project)
       val javacOptions = getJavacOptions(project)
 
-      val dependencySet = dependencyArtifacts.toSet
-      val libraryJars = dependencySet.map { art =>
+      val libraryJars = dependencyArtifacts.map { art =>
         val defaultArtifact = new DefaultArtifact(art.getGroupId,
           art.getArtifactId, "jar", art.getVersion)
         resolve(defaultArtifact)
       }
 
-      val librarySources = dependencySet.map { art =>
+      val librarySources = dependencyArtifacts.map { art =>
         val defaultArtifact = new DefaultArtifact(art.getGroupId,
           art.getArtifactId, "sources", "jar", art.getVersion)
         resolve(defaultArtifact)
       }
 
-      val libraryDocs = dependencySet.map { art =>
+      val libraryDocs = dependencyArtifacts.map { art =>
         val defaultArtifact = new DefaultArtifact(art.getGroupId,
           art.getArtifactId, "javadoc", "jar", art.getVersion)
         resolve(defaultArtifact)
