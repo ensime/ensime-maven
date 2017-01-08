@@ -85,8 +85,6 @@ class ConfigGenerator(
 
   private val ensimeServerVersion = "1.0.0"
 
-  val jarPattern = "\\.jar$".r
-
   def getJavaHome(): File = {
     List(
       // manual
@@ -247,24 +245,6 @@ class ConfigGenerator(
     Option(project.getProperties().getProperty("scala.version")).getOrElse("2.10.6") // So arbitrary.
   }
 
-  /**
-   * An inefficient scala source root finder.
-   * @param lookIn - List of java source roots according to maven
-   * @return a list of scala source roots
-   * @author parsnips
-   */
-  def getScalaSourceRoots(lookIn: JList[String]): JList[String] = {
-    val scalas = new scala.collection.mutable.SetBuilder[String, Set[String]](Set())
-
-    lookIn.foreach { here =>
-      val path = here.split("/").filter(_ != "java").mkString("/") + "/scala"
-      if (Files.exists(Paths.get(path))) {
-        scalas += path
-      }
-    }
-    scalas.result().toList
-  }
-
   def getEnsimeProjects(): List[EnsimeProject] = {
     val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].toList).filter {
       project => project.getPackaging != "pom"
@@ -315,99 +295,12 @@ class ConfigGenerator(
    */
   def generate(out: File): Unit = {
 
-    implicit val ArtifactToString = new As[Artifact, String] {
-
-      def as(artifact: Artifact) = {
-        artifact.getGroupId + ":" + artifact.getArtifactId + ":" + artifact.getVersion
-      }
-    }
-
-    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].toList).filter {
-      project => project.getPackaging != "pom"
-    }
-
-    val artifactIdToModule = modules.map {
-      module => module.getArtifact.as[String] -> module
-    }.toMap
-
-    implicit val MavenProjectAsSubProject = new As[MavenProject, SubProject] {
-
-      def as(project: MavenProject): SubProject = {
-        val (dependsOnModules, runtimeDeps, compileDeps, testDeps) =
-          (project.getArtifacts.asInstanceOf[JSet[Artifact]] :\ (ListSet.empty[MavenProject], List.empty[String], List.empty[String], List.empty[String])) {
-            case (artifact, (dependsOnModules, runtimeDeps, compileDeps, testDeps)) =>
-              val artifactId = artifact.as[String]
-              if (artifactIdToModule.contains(artifactId)) {
-                (dependsOnModules + artifactIdToModule(artifactId), runtimeDeps, compileDeps, testDeps)
-              } else {
-                // make sure we're only loading jars, otherwise ensime will have
-                // issues. Not sure if we should include `ejb-client` or not,
-                // but definitely throws errors on `pom` files
-                if (artifact.getType().matches("(test-)?jar")) {
-                  val path = artifact.getFile.getAbsolutePath
-                  artifact.getScope match {
-                    case Artifact.SCOPE_PROVIDED =>
-                      (dependsOnModules, runtimeDeps, path :: compileDeps, path :: testDeps)
-                    case Artifact.SCOPE_RUNTIME =>
-                      (dependsOnModules, path :: runtimeDeps, compileDeps, path :: testDeps)
-                    case Artifact.SCOPE_TEST =>
-                      (dependsOnModules, runtimeDeps, compileDeps, path :: testDeps)
-                    case _ =>
-                      (dependsOnModules, path :: runtimeDeps, path :: compileDeps, path :: testDeps)
-                  }
-                } else {
-                  (dependsOnModules, runtimeDeps, compileDeps, testDeps)
-                }
-              }
-          }
-
-        val sourceRoots = project.getCompileSourceRoots.asInstanceOf[JList[String]] ++: project.getTestCompileSourceRoots.asInstanceOf[JList[String]] ++: Nil
-        val scalaRoots = getScalaSourceRoots(sourceRoots)
-        val allDeps = (runtimeDeps ++ compileDeps ++ testDeps).toSet
-
-        SubProject(
-          project.getArtifactId,
-          project.getVersion,
-          runtimeDeps ::: ((dependsOnModules.toList :+ project).map { module =>
-            module.getBuild.getOutputDirectory
-          }),
-          compileDeps ::: (dependsOnModules.toList.map { module =>
-            module.getBuild.getOutputDirectory
-          }),
-          testDeps,
-          // TODO: File a bug against ensime-server, cuz this breaks shit
-          // ::: ((dependsOnModules.toList :+ project).map { module =>
-          //module.getBuild.getOutputDirectory
-          //} :+ project.getBuild.getTestOutputDirectory),
-          scalaRoots ++: sourceRoots,
-          List(project.getBuild.getOutputDirectory),
-          List(project.getBuild.getTestOutputDirectory),
-          dependsOnModules.toList.map(_.getArtifactId),
-          allDeps.foldLeft(List[String]()) { (output, dep) =>
-            val sourceJar = jarPattern.replaceFirstIn(dep, "-sources.jar")
-            if (new java.io.File(sourceJar).exists) {
-              sourceJar :: output
-            } else {
-              output
-            }
-          },
-          allDeps.foldLeft(List[String]()) { (output, dep) =>
-            val docJar = jarPattern.replaceFirstIn(dep, "-javadoc.jar")
-            if (new java.io.File(docJar).exists) {
-              docJar :: output
-            } else {
-              output
-            }
-          })
-      }
-    }
-
     val projectDir = project.getBasedir().toPath().toAbsolutePath().toString()
     val cacheDir = new File(projectDir + "/.ensime_cache")
 
     val subProjects = getEnsimeProjects
 
-    val ensimeModules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
+    val modules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
     val javaSrc = {
       val file = new File(getJavaHome + File.separator + "src.zip")
       file match {
@@ -419,9 +312,9 @@ class ConfigGenerator(
     val config = EnsimeConfig(project.getBasedir, cacheDir,
       getScalaJars, getEnsimeServerJars, project.getName,
       getScalaVersion(),
-      getScalacOptions(project), ensimeModules, getJavaHome(),
+      getScalacOptions(project), modules, getJavaHome(),
       getEnsimeJavaFlags(), getJavacOptions(project), javaSrc, subProjects)
-    val emitter = new SExprEmitter(Project(project.getName, projectDir, cacheDir.toString, getScalaVersion(), getJavaHome().toString, getEnsimeJavaFlags(), modules.map(_.as[SubProject]), FormatterPreferences(properties)).as[SExpr])
+    val emitter = new SExprEmitter(config.as[SExpr])
     emitter.emit(new FileOutputStream(out).asOutput)
   }
 }
