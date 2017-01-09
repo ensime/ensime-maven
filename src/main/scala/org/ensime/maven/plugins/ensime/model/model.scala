@@ -189,13 +189,14 @@ object EnsimeConfig {
         (SKeyword("ensime-server-jars") ->
           SList(config.ensimeServerJars.map(f => SString(f.getAbsolutePath)).toSeq)),
         (SKeyword("name") -> SString(config.name)),
-        (SKeyword("scala-version") -> SString(config.scalaVersion)),
-        (SKeyword("compier-args"), SList(config.scalacOptions.map(SString))),
-        (SKeyword("subprojects") -> SList(config.modules.values.map(EnsimeModuleAsSExpr.as).toSeq)),
         (SKeyword("java-home"), SString(config.javaHome.getAbsolutePath)),
         (SKeyword("java-flags"), SList(config.javaFlags.map(SString))),
-        (SKeyword("java-compiler-args"), SList(config.javacOptions.map(SString))),
         (SKeyword("java-sources"), SList(config.javaSrc.map(f => SString(f.getAbsolutePath)).toSeq)),
+        (SKeyword("java-compiler-args"), SList(config.javacOptions.map(SString))),
+        (SKeyword("reference-source-roots"), SList(config.javaSrc.map(f => SString(f.getAbsolutePath)).toSeq)),
+        (SKeyword("scala-version") -> SString(config.scalaVersion)),
+        (SKeyword("compiler-args"), SList(config.scalacOptions.map(SString))),
+        (SKeyword("subprojects") -> SList(config.modules.values.map(EnsimeModuleAsSExpr.as).toSeq)),
         (SKeyword("projects"), SList(config.projects.map(EnsimeProjectAsSExpr.as).toSeq))))
     }
   }
