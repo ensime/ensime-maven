@@ -15,7 +15,7 @@
  */
 package org.ensime.maven.plugins.ensime
 
-import java.io.{ File, FileOutputStream, FileNotFoundException }
+import java.io.{ PrintWriter, File, FileOutputStream, FileNotFoundException }
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.{ List => JList }
@@ -363,6 +363,12 @@ class ConfigGenerator(
     }
   }
 
+  def write(content: String, out: File) = {
+    val writer = new PrintWriter(out)
+    writer.write(content)
+    writer.close
+  }
+
   /**
    * Generates configurations.
    */
@@ -387,7 +393,102 @@ class ConfigGenerator(
       getScalaVersion(),
       getScalacOptions(project), modules, getJavaHome(),
       getEnsimeJavaFlags(), getJavacOptions(project), javaSrc, subProjects)
-    val emitter = new SExprEmitter(config.as[SExpr])
-    emitter.emit(new FileOutputStream(out).asOutput)
+    // val emitter = new SExprEmitter(config.as[SExpr])
+    // emitter.emit(new FileOutputStream(out).asOutput)
+    write(SExpFormatter.toSExp(config).replaceAll("\r\n", "\n") + "\n", out)
   }
+}
+
+// direct formatter to deal with a small number of domain objects
+// if we had to do this for general objects, it would make sense
+// to create a series of implicit convertors to an SExp hierarchy
+object SExpFormatter {
+
+  // normalise and ensure monkeys go first
+  // (bit of a hack to do it here, maybe best when creating)
+  private[ensime] def orderFiles(ss: Iterable[File]): List[File] = {
+    val (monkeys, humans) = ss.toList.distinct.sortBy { f =>
+      f.getName + f.getPath
+    }.partition(_.getName.contains("monkey"))
+    monkeys ::: humans
+  }
+
+  def toSExp(s: String): String =
+    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+  def toSExp(f: File): String = toSExp(f.getAbsolutePath)
+
+  def fsToSExp(ss: Iterable[File]): String =
+    if (ss.isEmpty) "nil"
+    else orderFiles(ss).map(toSExp).mkString("(", " ", ")")
+
+  def ssToSExp(ss: Iterable[String]): String =
+    if (ss.isEmpty) "nil"
+    else ss.toSeq.map(toSExp).mkString("(", " ", ")")
+
+  def msToSExp(ss: Iterable[EnsimeModule]): String =
+    if (ss.isEmpty) "nil"
+    else ss.toSeq.sortBy(_.name).map(toSExp).mkString("(", " ", ")")
+
+  def psToSExp(ss: Iterable[EnsimeProject]): String =
+    if (ss.isEmpty) "nil"
+    else ss.toSeq.sortBy(_.id.toString).map(toSExp).mkString("(", " ", ")")
+
+  def fToSExp(key: String, op: Option[File]): String =
+    op.map { f => s":$key ${toSExp(f)}" }.getOrElse("")
+
+  def sToSExp(key: String, op: Option[String]): String =
+    op.map { f => s":$key ${toSExp(f)}" }.getOrElse("")
+
+  def toSExp(b: Boolean): String = if (b) "t" else "nil"
+
+  // a lot of legacy key names and conventions
+  def toSExp(c: EnsimeConfig): String = s"""(
+ :root-dir ${toSExp(c.root)}
+ :cache-dir ${toSExp(c.cacheDir)}
+ :scala-compiler-jars ${fsToSExp(c.scalaCompilerJars)}
+ :ensime-server-jars ${fsToSExp(c.ensimeServerJars)}
+ :name "${c.name}"
+ :java-home ${toSExp(c.javaHome)}
+ :java-flags ${ssToSExp(c.javaFlags)}
+ :java-sources ${fsToSExp(c.javaSrc)}
+ :java-compiler-args ${ssToSExp(c.javacOptions)}
+ :reference-source-roots ${fsToSExp(c.javaSrc)}
+ :scala-version ${toSExp(c.scalaVersion)}
+ :compiler-args ${ssToSExp(c.scalacOptions)}
+ :subprojects ${msToSExp(c.modules.values)}
+ :projects ${psToSExp(c.projects)}
+)"""
+
+  // a lot of legacy key names and conventions
+  def toSExp(m: EnsimeModule): String = s"""(
+   :name ${toSExp(m.name)}
+   :source-roots ${fsToSExp((m.mainRoots ++ m.testRoots))}
+   :targets ${fsToSExp(m.targets)}
+   :test-targets ${fsToSExp(m.testTargets)}
+   :depends-on-modules ${ssToSExp(m.dependsOnNames.toList.sorted)}
+   :compile-deps ${fsToSExp(m.compileJars)}
+   :runtime-deps ${fsToSExp(m.runtimeJars)}
+   :test-deps ${fsToSExp(m.testJars)}
+   :doc-jars ${fsToSExp(m.docJars)}
+   :reference-source-roots ${fsToSExp(m.sourceJars)})"""
+
+  def toSExp(p: EnsimeProject): String = s"""(
+    :id ${toSExp(p.id)}
+    :depends ${idsToSExp(p.depends)}
+    :sources ${fsToSExp(p.sources)}
+    :targets ${fsToSExp(p.targets)}
+    :scalac-options ${ssToSExp(p.scalacOptions)}
+    :javac-options ${ssToSExp(p.javacOptions)}
+    :library-jars ${fsToSExp(p.libraryJars)}
+    :library-sources ${fsToSExp(p.librarySources)}
+    :library-docs ${fsToSExp(p.libraryDocs)})"""
+
+  def toSExp(id: EnsimeProjectId): String =
+    s"""(:project ${toSExp(id.project)} :config ${toSExp(id.config)})"""
+
+  def idsToSExp(ids: Iterable[EnsimeProjectId]): String =
+    if (ids.isEmpty) "nil"
+    else ids.toSeq.sortBy(_.toString).map(toSExp).mkString("(", " ", ")")
+
 }
