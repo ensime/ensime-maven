@@ -16,37 +16,27 @@
 package org.ensime.maven.plugins.ensime
 
 import java.io.{ PrintWriter, File, FileOutputStream, FileNotFoundException }
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.{ List => JList }
-import java.util.Properties
 import java.util.{ Set => JSet }
 import java.util.{ Map => JMap }
-import scala.collection.JavaConversions._
-import scala.collection.immutable.ListSet
+import java.util.Properties
 import scala.sys.process._
 import scala.util._
-import scalax.io.JavaConverters._
 import org.codehaus.plexus.util.xml.Xpp3Dom
 import org.apache.maven.artifact.Artifact
 import org.apache.maven.project.MavenProject
-import org.eclipse.aether.RepositorySystemSession;
-import org.eclipse.aether.RepositorySystem;
+import org.apache.maven.model.{Plugin, Repository}
+import org.eclipse.aether.{RepositorySystemSession, RepositorySystem}
 import org.eclipse.aether.artifact.DefaultArtifact
-import org.eclipse.aether.resolution.ArtifactRequest
-import org.eclipse.aether.resolution.ArtifactResult
-import org.eclipse.aether.resolution.DependencyRequest
-import org.eclipse.aether.resolution.ArtifactResolutionException
+import org.eclipse.aether.resolution.{ArtifactRequest,
+                                      ArtifactResult,
+                                      DependencyRequest,
+                                      ArtifactResolutionException}
 import org.eclipse.aether.collection.CollectRequest
 import org.eclipse.aether.graph.Dependency
 import org.eclipse.aether.repository.RemoteRepository
-import org.apache.maven.model.Plugin
-import org.apache.maven.model.Repository
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 import org.ensime.maven.plugins.ensime.model._
-import org.ensime.maven.plugins.ensime.sexpr.SExpr
-import org.ensime.maven.plugins.ensime.sexpr.SExprEmitter
-import org.ensime.maven.plugins.ensime.model.FormatterPreferences
 import scala.util.Properties.{ versionNumberString => systemScalaVersion }
 
 /**
@@ -68,7 +58,7 @@ class ConfigGenerator(
       .asInstanceOf[JList[Repository]].asScala.toList
     repoSystem.newResolutionRepositories(session,
       repos.map(r =>
-        new RemoteRepository.Builder(r.getId, "default", r.getUrl).build))
+        new RemoteRepository.Builder(r.getId, "default", r.getUrl).build).asJava)
   }
 
   private val SCALA_MAVEN_PLUGIN_GROUP_ID =
@@ -89,7 +79,7 @@ class ConfigGenerator(
 
   private val ensimeServerVersion = "1.0.0"
 
-  def getJavaHome(): File = {
+  private def getJavaHome(): File = {
     List(
       // manual
       sys.env.get("JDK_HOME"),
@@ -175,10 +165,10 @@ class ConfigGenerator(
       mainJars, Set.empty, testJars, sourceJars, docJars)
   }
 
-  lazy val getScalaJars =
+  private lazy val getScalaJars =
     resolveScalaJars(getScalaOrganization, getScalaVersion)
 
-  def getEnsimeServerJars() =
+  private def getEnsimeServerJars() =
     resolveEnsimeJars(getScalaOrganization, ensimeServerVersion) --
       getScalaJars +
       new File(getJavaHome.getAbsolutePath / "lib" / "tools.jar")
@@ -189,7 +179,7 @@ class ConfigGenerator(
    * @return List of java flags or empty list if not provided
    * @author parsnips
    */
-  def getEnsimeJavaFlags(): List[String] = {
+  private def getEnsimeJavaFlags(): List[String] = {
     Option(System.getenv("ENSIME_JAVA_FLAGS")).map(flags =>
       parser.JavaFlagsParser(flags)).toList.flatten
   }
@@ -199,7 +189,7 @@ class ConfigGenerator(
    * @return String containing the scala organization
    * @author amanjpro
    */
-  def getScalaOrganization(): String = {
+  private def getScalaOrganization(): String = {
     val scalacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
@@ -215,7 +205,7 @@ class ConfigGenerator(
    * @return A list containing the scalacOptions
    * @author amanjpro
    */
-  def getScalacOptions(project: MavenProject): List[String] = {
+  private def getScalacOptions(project: MavenProject): List[String] = {
     val scalacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
@@ -250,7 +240,7 @@ class ConfigGenerator(
    * @return A list containing the javacOptions
    * @author amanjpro
    */
-  def getJavacOptions(project: MavenProject): List[String] = {
+  private def getJavacOptions(project: MavenProject): List[String] = {
     val javacPlugin =
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
@@ -283,12 +273,12 @@ class ConfigGenerator(
    * @return String containing the scala version
    * @author parsnips
    */
-  def getScalaVersion(): String = {
+  private def getScalaVersion(): String = {
     Option(project.getProperties().getProperty("scala.version")).getOrElse("2.10.6") // So arbitrary.
   }
 
-  def getEnsimeProjects(): List[EnsimeProject] = {
-    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].toList).filter {
+  private def getEnsimeProjects(): List[EnsimeProject] = {
+    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].asScala.toList).filter {
       project => project.getPackaging != "pom"
     }
 
@@ -363,7 +353,7 @@ class ConfigGenerator(
     }
   }
 
-  def write(content: String, out: File) = {
+  private def write(content: String, out: File) = {
     val writer = new PrintWriter(out)
     writer.write(content)
     writer.close
@@ -413,34 +403,34 @@ object SExpFormatter {
     monkeys ::: humans
   }
 
-  def toSExp(s: String): String =
+  private def toSExp(s: String): String =
     "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
-  def toSExp(f: File): String = toSExp(f.getAbsolutePath)
+  private def toSExp(f: File): String = toSExp(f.getAbsolutePath)
 
-  def fsToSExp(ss: Iterable[File]): String =
+  private def fsToSExp(ss: Iterable[File]): String =
     if (ss.isEmpty) "nil"
     else orderFiles(ss).map(toSExp).mkString("(", " ", ")")
 
-  def ssToSExp(ss: Iterable[String]): String =
+  private def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
     else ss.toSeq.map(toSExp).mkString("(", " ", ")")
 
-  def msToSExp(ss: Iterable[EnsimeModule]): String =
+  private def msToSExp(ss: Iterable[EnsimeModule]): String =
     if (ss.isEmpty) "nil"
     else ss.toSeq.sortBy(_.name).map(toSExp).mkString("(", " ", ")")
 
-  def psToSExp(ss: Iterable[EnsimeProject]): String =
+  private def psToSExp(ss: Iterable[EnsimeProject]): String =
     if (ss.isEmpty) "nil"
     else ss.toSeq.sortBy(_.id.toString).map(toSExp).mkString("(", " ", ")")
 
-  def fToSExp(key: String, op: Option[File]): String =
+  private def fToSExp(key: String, op: Option[File]): String =
     op.map { f => s":$key ${toSExp(f)}" }.getOrElse("")
 
-  def sToSExp(key: String, op: Option[String]): String =
+  private def sToSExp(key: String, op: Option[String]): String =
     op.map { f => s":$key ${toSExp(f)}" }.getOrElse("")
 
-  def toSExp(b: Boolean): String = if (b) "t" else "nil"
+  private def toSExp(b: Boolean): String = if (b) "t" else "nil"
 
   // a lot of legacy key names and conventions
   def toSExp(c: EnsimeConfig): String = s"""(
@@ -461,7 +451,7 @@ object SExpFormatter {
 )"""
 
   // a lot of legacy key names and conventions
-  def toSExp(m: EnsimeModule): String = s"""(
+  private def toSExp(m: EnsimeModule): String = s"""(
    :name ${toSExp(m.name)}
    :source-roots ${fsToSExp((m.mainRoots ++ m.testRoots))}
    :targets ${fsToSExp(m.targets)}
@@ -473,7 +463,7 @@ object SExpFormatter {
    :doc-jars ${fsToSExp(m.docJars)}
    :reference-source-roots ${fsToSExp(m.sourceJars)})"""
 
-  def toSExp(p: EnsimeProject): String = s"""(
+  private def toSExp(p: EnsimeProject): String = s"""(
     :id ${toSExp(p.id)}
     :depends ${idsToSExp(p.depends)}
     :sources ${fsToSExp(p.sources)}
@@ -484,10 +474,10 @@ object SExpFormatter {
     :library-sources ${fsToSExp(p.librarySources)}
     :library-docs ${fsToSExp(p.libraryDocs)})"""
 
-  def toSExp(id: EnsimeProjectId): String =
+  private def toSExp(id: EnsimeProjectId): String =
     s"""(:project ${toSExp(id.project)} :config ${toSExp(id.config)})"""
 
-  def idsToSExp(ids: Iterable[EnsimeProjectId]): String =
+  private def idsToSExp(ids: Iterable[EnsimeProjectId]): String =
     if (ids.isEmpty) "nil"
     else ids.toSeq.sortBy(_.toString).map(toSExp).mkString("(", " ", ")")
 
