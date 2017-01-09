@@ -59,6 +59,10 @@ class ConfigGenerator(
     val session: RepositorySystemSession,
     val properties: Properties) {
 
+  implicit class StrintToPath(path: String) {
+    def /(content: String) = path + File.separator + content
+  }
+
   private val remoteRepositories = {
     val repos = project.getRepositories
       .asInstanceOf[JList[Repository]].asScala.toList
@@ -147,8 +151,8 @@ class ConfigGenerator(
       val (major, minor) = partialVersion
       s"$major.$minor"
     }
-    resolveAll(artifact(org, "scalap", systemScalaVersion)) +
-      resolve(artifact("org.ensime", s"server_$scala", ensimeServerVersion))
+    resolveAll(artifact("org.ensime", s"server_$scala", ensimeServerVersion)) +
+      resolve(artifact(org, "scalap", systemScalaVersion))
   }
 
   private def ensimeProjectsToModule(p: Iterable[EnsimeProject]): EnsimeModule = {
@@ -171,11 +175,13 @@ class ConfigGenerator(
       mainJars, Set.empty, testJars, sourceJars, docJars)
   }
 
-  def getScalaJars() =
+  lazy val getScalaJars =
     resolveScalaJars(getScalaOrganization, getScalaVersion)
 
   def getEnsimeServerJars() =
-    resolveEnsimeJars(getScalaOrganization, ensimeServerVersion)
+    resolveEnsimeJars(getScalaOrganization, ensimeServerVersion) --
+      getScalaJars +
+      new File(getJavaHome.getAbsolutePath / "lib" / "tools.jar")
 
   /**
    * Get java-flags from environment variable `ENSIME_JAVA_FLAGS` .
@@ -184,13 +190,8 @@ class ConfigGenerator(
    * @author parsnips
    */
   def getEnsimeJavaFlags(): List[String] = {
-    val providedFlags = Option(System.getenv("ENSIME_JAVA_FLAGS")) match {
-      case Some(flags) => parser.JavaFlagsParser(flags)
-      case _           => List()
-    }
-
-    val suggestedFlags = Seq("-Densime.config=.ensime", "-Densime.exitAfterIndex=true")
-    providedFlags ++ suggestedFlags
+    Option(System.getenv("ENSIME_JAVA_FLAGS")).map(flags =>
+      parser.JavaFlagsParser(flags)).toList.flatten
   }
 
   /**
@@ -254,11 +255,26 @@ class ConfigGenerator(
       project.getPluginManagement().getPluginsAsMap
         .asInstanceOf[JMap[String, Plugin]]
         .get(JAVA_MAVEN_PLUGIN)
-    Option(javacPlugin).map(_.getConfiguration).flatMap {
+
+    val scalacPlugin =
+      project.getPluginManagement().getPluginsAsMap
+        .asInstanceOf[JMap[String, Plugin]]
+        .get(SCALA_MAVEN_PLUGIN)
+
+    val javacOptions = Option(javacPlugin).map(_.getConfiguration).flatMap {
       case config: Xpp3Dom =>
         Option(config.getChild("compilerArgs"))
           .map(_.getChildren.toList.map(_.getValue))
     }.toList.flatten
+
+    val jvmOptions = Option(scalacPlugin).map(_.getConfiguration).flatMap {
+      case config: Xpp3Dom =>
+        Option(config.getChild("jvmArgs"))
+          .map(_.getChildren.toList.map(_.getValue))
+    }.toList.flatten
+
+    javacOptions ++ jvmOptions
+
   }
 
   /**
@@ -278,30 +294,68 @@ class ConfigGenerator(
 
     modules.map { module =>
       val projectId = EnsimeProjectId(project.getId, Option(project.getDefaultGoal).getOrElse("compile"))
-      // This only gets the direct dependencies
-      val dependencyArtifacts = project.getDependencyArtifacts.asInstanceOf[JSet[Artifact]].asScala.toSet
-      val depends = dependencyArtifacts.toSeq.map(d => EnsimeProjectId(d.getId, "compile"))
+      val dependencyArtifacts =
+        project.getDependencyArtifacts.asInstanceOf[JSet[Artifact]].asScala.toSet
+
+      // This only gets the direct dependencies, and we filter all the
+      // dependencies that are not a subproject of this potentially
+      // multiproject project
+      val depends = dependencyArtifacts.filter(d => modules.exists(m => m.getId == d.getId)).toSeq.map(d => EnsimeProjectId(d.getId, "compile"))
+
       val sources = {
-        val compileSources =
-          module.getCompileSourceRoots.asInstanceOf[JList[String]].asScala.toSet
-        val testSources =
-          module.getTestCompileSourceRoots.asInstanceOf[JList[String]].asScala.toSet
+        val scalacPlugin =
+          project.getPluginManagement().getPluginsAsMap
+            .asInstanceOf[JMap[String, Plugin]]
+            .get(SCALA_MAVEN_PLUGIN)
+
+        val compileSources = {
+          val scalaSources = {
+            val sources = Option(scalacPlugin).map(_.getConfiguration).flatMap {
+              case config: Xpp3Dom =>
+                Option(config.getChild("sources"))
+                  .map(_.getChildren.toList.map(_.getValue))
+            }.toList.flatten
+            if (sources == Nil) {
+              Set(new File(module.getBasedir.getAbsolutePath / "src" / "main" / "scala").getAbsolutePath)
+            } else sources
+          }
+
+          (scalaSources ++
+            module.getCompileSourceRoots.asInstanceOf[JList[String]].asScala).toSet
+        }
+        val testSources = {
+          val scalaTests = {
+            val tests = Option(scalacPlugin).map(_.getConfiguration).flatMap {
+              case config: Xpp3Dom =>
+                Option(config.getChild("sources"))
+                  .map(_.getChildren.toList.map(_.getValue))
+            }.toList.flatten
+            if (tests == Nil) {
+              Set(new File(module.getBasedir.getAbsolutePath / "src" / "test" / "scala").getAbsolutePath)
+            } else tests
+          }
+          (scalaTests ++ module.getTestCompileSourceRoots.asInstanceOf[JList[String]].asScala).toSet
+        }
         (compileSources ++ testSources).map(new File(_))
       }
       val targets = Set(new File(project.getBuild.getOutputDirectory))
       val scalacOptions = getScalacOptions(project)
       val javacOptions = getJavacOptions(project)
 
-      val (libraryJars, librarySources, libraryDocs) =
-        dependencyArtifacts.map { art =>
-          val jarFile = resolve(new DefaultArtifact(art.getGroupId,
-            art.getArtifactId, "jar", art.getVersion))
-          val sourcesFile = resolve(new DefaultArtifact(art.getGroupId,
-            art.getArtifactId, "sources", "jar", art.getVersion))
-          val libraryDocs = resolve(new DefaultArtifact(art.getGroupId,
-            art.getArtifactId, "javadoc", "jar", art.getVersion))
-          (jarFile, sourcesFile, libraryDocs)
-        }.unzip3
+      val libraryJars = dependencyArtifacts.flatMap { art =>
+        resolveAll(new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "jar", art.getVersion))
+      }
+
+      val librarySources = dependencyArtifacts.flatMap { art =>
+        resolveAll(new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "sources", "jar", art.getVersion))
+      }
+
+      val libraryDocs = dependencyArtifacts.flatMap { art =>
+        resolveAll(new DefaultArtifact(art.getGroupId,
+          art.getArtifactId, "javadoc", "jar", art.getVersion))
+      }
 
       EnsimeProject(projectId, depends, sources, targets,
         scalacOptions, javacOptions, libraryJars, librarySources,
@@ -315,13 +369,13 @@ class ConfigGenerator(
   def generate(out: File): Unit = {
 
     val projectDir = project.getBasedir().toPath().toAbsolutePath().toString()
-    val cacheDir = new File(projectDir + "/.ensime_cache")
+    val cacheDir = new File(projectDir / ".ensime_cache")
 
     val subProjects = getEnsimeProjects
 
     val modules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
     val javaSrc = {
-      val file = new File(getJavaHome + File.separator + "src.zip")
+      val file = new File(getJavaHome.getAbsolutePath / "src.zip")
       file match {
         case f if f.exists => Set(f)
         case _             => Set.empty[File]
