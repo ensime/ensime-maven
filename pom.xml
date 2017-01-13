@@ -52,6 +52,13 @@
     </repository>
   </distributionManagement>
 
+  <repositories>
+    <repository>
+      <id>sonatype-nexus-snapshots</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+  </repositories>
+
   <properties>
     <mavenVersion>2.0.11</mavenVersion>
     <maven.test.jvmargs>-Xmx1024m</maven.test.jvmargs>

@@ -79,7 +79,7 @@ class ConfigGenerator(
   private val JAVA_MAVEN_PLUGIN =
     s"${JAVA_MAVEN_PLUGIN_GROUP_ID}:${JAVA_MAVEN_PLUGIN_ARTIFACT_ID}"
 
-  private val ensimeServerVersion = "1.0.0"
+  private val ensimeServerVersion = "2.0.0-SNAPSHOT"
 
   private def getJavaHome(): File = {
     List(
