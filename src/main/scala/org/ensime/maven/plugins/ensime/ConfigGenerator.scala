@@ -20,6 +20,7 @@ import java.util.{ List => JList }
 import java.util.{ Set => JSet }
 import java.util.{ Map => JMap }
 import java.util.Properties
+import java.lang.management.ManagementFactory
 import scala.sys.process._
 import scala.util._
 import org.codehaus.plexus.util.xml.Xpp3Dom
@@ -170,10 +171,16 @@ class ConfigGenerator(
   private lazy val getScalaJars =
     resolveScalaJars(getScalaOrganization, getScalaVersion)
 
-  private def getEnsimeServerJars() =
-    resolveEnsimeJars(getScalaOrganization, ensimeServerVersion) --
-      getScalaJars +
-      new File(getJavaHome.getAbsolutePath / "lib" / "tools.jar")
+  private def getEnsimeServerJars() = {
+    val resolvedEnsimeJars =
+      resolveEnsimeJars(getScalaOrganization, ensimeServerVersion).filter { f =>
+        val name = f.getName
+        !(name.contains("scalap") || name.contains("scala-reflect") ||
+          name.contains("scala-library") || name.contains("scala-compiler"))
+      }
+    val toolsJar = new File(getJavaHome.getAbsolutePath / "lib" / "tools.jar")
+    resolvedEnsimeJars + toolsJar
+  }
 
   /**
    * Get java-flags from environment variable `ENSIME_JAVA_FLAGS` .
@@ -182,8 +189,15 @@ class ConfigGenerator(
    * @author parsnips
    */
   private def getEnsimeJavaFlags(): List[String] = {
-    Option(System.getenv("ENSIME_JAVA_FLAGS")).map(flags =>
-      parser.JavaFlagsParser(flags)).toList.flatten
+    // WORKAROUND https://github.com/ensime/ensime-sbt/issues/91
+    val raw = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList.map {
+      case "-Xss1M" => "-Xss2m"
+      case flag     => flag
+    }
+    raw.find { flag => flag.startsWith("-Xss") } match {
+      case Some(has) => raw
+      case None      => "-Xss2m" :: raw
+    }
   }
 
   /**
@@ -202,6 +216,22 @@ class ConfigGenerator(
     }.getOrElse("org.scala-lang")
   }
 
+  private def ensimeSuggestedOptions() = List(
+    "-feature",
+    "-deprecation",
+    "-Xlint",
+    "-Ywarn-dead-code",
+    "-Ywarn-numeric-widen",
+    "-Xfuture") ++ {
+      partialVersion match {
+        case (2, 10) =>
+          Set("-Ymacro-no-expand")
+        case (2, v) if v >= 11 =>
+          Set("-Ywarn-unused-import", "-Ymacro-expand:discard")
+        case _ => Set.empty
+      }
+    }
+
   /**
    * Get the scalacOptions for this project.
    * @return A list containing the scalacOptions
@@ -218,23 +248,7 @@ class ConfigGenerator(
           .map(_.getChildren.toList.map(_.getValue))
     }.toList.flatten
 
-    val suggestedOptions = Set(
-      "-feature",
-      "-deprecation",
-      "-Xlint",
-      "-Ywarn-dead-code",
-      "-Ywarn-numeric-widen",
-      "-Xfuture") ++ {
-        partialVersion match {
-          case (2, 10) =>
-            Set("-Ymacro-no-expand")
-          case (2, v) if v >= 11 =>
-            Set("-Ywarn-unused-import", "-Ymacro-expand:discard")
-          case _ => Set.empty
-        }
-      }
-
-    providedOptions ++ suggestedOptions
+    (providedOptions ++ ensimeSuggestedOptions()).distinct
   }
 
   /**
@@ -280,19 +294,17 @@ class ConfigGenerator(
   }
 
   private def getEnsimeProjects(): List[EnsimeProject] = {
-    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].asScala.toList).filter {
-      project => project.getPackaging != "pom"
-    }
+    val modules = (project :: project.getCollectedProjects.asInstanceOf[JList[MavenProject]].asScala.toList)
 
     modules.map { module =>
-      val projectId = EnsimeProjectId(project.getId, Option(project.getDefaultGoal).getOrElse("compile"))
+      val projectId = EnsimeProjectId(project.getArtifactId, Option(project.getDefaultGoal).getOrElse("compile"))
       val dependencyArtifacts =
         project.getDependencyArtifacts.asInstanceOf[JSet[Artifact]].asScala.toSet
 
       // This only gets the direct dependencies, and we filter all the
       // dependencies that are not a subproject of this potentially
       // multiproject project
-      val depends = dependencyArtifacts.filter(d => modules.exists(m => m.getId == d.getId)).toSeq.map(d => EnsimeProjectId(d.getId, "compile"))
+      val depends = dependencyArtifacts.filter(d => modules.exists(m => m.getId == d.getId)).toSeq.map(d => EnsimeProjectId(d.getArtifactId, "compile"))
 
       val sources = {
         val scalacPlugin =
@@ -383,15 +395,10 @@ class ConfigGenerator(
     val config = EnsimeConfig(project.getBasedir, cacheDir,
       getScalaJars, getEnsimeServerJars, project.getName,
       getScalaVersion(),
-      getScalacOptions(project), modules, getJavaHome(),
+      ensimeSuggestedOptions(), modules, getJavaHome(),
       getEnsimeJavaFlags(), getJavacOptions(project), javaSrc, subProjects)
     // val emitter = new SExprEmitter(config.as[SExpr])
     // emitter.emit(new FileOutputStream(out).asOutput)
     write(SExpFormatter.toSExp(config).replaceAll("\r\n", "\n") + "\n", out)
   }
 }
-
-// direct formatter to deal with a small number of domain objects
-// if we had to do this for general objects, it would make sense
-// to create a series of implicit convertors to an SExp hierarchy
-

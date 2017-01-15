@@ -63,7 +63,7 @@
     <mavenVersion>2.0.11</mavenVersion>
     <maven.test.jvmargs>-Xmx1024m</maven.test.jvmargs>
 
-    <scala.version>2.10.5</scala.version>
+    <scala.version>2.10.6</scala.version>
     <scala-major.version>2.10</scala-major.version>
     <scala-io.version>0.4.3</scala-io.version>
 
