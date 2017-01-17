@@ -320,7 +320,9 @@ class ConfigGenerator(
                   .map(_.getChildren.toList.map(_.getValue))
             }.toList.flatten
             if (sources == Nil) {
-              Set(new File(module.getBasedir.getAbsolutePath / "src" / "main" / "scala").getAbsolutePath)
+              Set(new File(module.getBasedir.getAbsolutePath / "src" / "main" / "scala"),
+                new File(module.getBasedir.getAbsolutePath / "src" / "main" / "java"))
+                .map(_.getAbsolutePath)
             } else sources
           }
 
@@ -335,12 +337,14 @@ class ConfigGenerator(
                   .map(_.getChildren.toList.map(_.getValue))
             }.toList.flatten
             if (tests == Nil) {
-              Set(new File(module.getBasedir.getAbsolutePath / "src" / "test" / "scala").getAbsolutePath)
+              Set(new File(module.getBasedir.getAbsolutePath / "src" / "test" / "scala"),
+                new File(module.getBasedir.getAbsolutePath / "src" / "test" / "java"))
+                .map(_.getAbsolutePath)
             } else tests
           }
           (scalaTests ++ module.getTestCompileSourceRoots.asInstanceOf[JList[String]].asScala).toSet
         }
-        (compileSources ++ testSources).map(new File(_))
+        (compileSources ++ testSources).map(new File(_)).filter(_.exists)
       }
       val targets = Set(new File(project.getBuild.getOutputDirectory))
       val scalacOptions = getScalacOptions(project)
