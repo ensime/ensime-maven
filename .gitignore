@@ -6,3 +6,5 @@ target
 .scala_dependencies
 .ensime*
 .projectile
+.idea
+*.iml

@@ -319,10 +319,10 @@ final public class EnsimeConfigGenerator {
    */
   private String getScalaVersion() {
 
-      List<org.apache.maven.model.Dependency> directDependencies = 
+      List<org.apache.maven.model.Dependency> directDependencies =
           project.getDependencies();
 
-      List<org.apache.maven.model.Dependency> depMgmtDependencies = 
+      List<org.apache.maven.model.Dependency> depMgmtDependencies =
           Optional.<DependencyManagement>ofNullable(
               project.getModel().getDependencyManagement())
           .map(depMgmt -> depMgmt.getDependencies())
@@ -685,36 +685,39 @@ final public class EnsimeConfigGenerator {
     } catch(IOException ioex) {}
   }
 
-  /**
-   * Generates configurations.
-   */
-  public void generate(final File out) {
-
-    String projectDir =
-      project.getBasedir().toPath().toAbsolutePath().toString();
+  public EnsimeConfig generateConfig() {
+    String projectDir = project.getBasedir().toPath().toAbsolutePath().toString();
 
     File cacheDir = new File(projectDir + SP + ".ensime_cache");
 
     List<EnsimeProject> subProjects = getEnsimeProjects();
 
     Map<String, EnsimeModule> modules =
-      subProjects.stream().collect(groupingBy(s -> s.getId().getProject()))
-      .entrySet().stream()
-      .collect(toMap(p -> p.getKey(), p -> ensimeProjectsToModule(p.getValue())));
+        subProjects.stream().collect(groupingBy(s -> s.getId().getProject()))
+            .entrySet().stream()
+            .collect(toMap(Map.Entry::getKey, p -> ensimeProjectsToModule(p.getValue())));
 
     File javaSrcFile = new File(getJavaHome().getAbsolutePath() + SP + "src.zip");
     Set<File> javaSrc = new HashSet<>();
 
-    if(javaSrcFile.exists()) javaSrc.add(javaSrcFile);
+    if (javaSrcFile.exists()) {
+      javaSrc.add(javaSrcFile);
+    }
 
     EnsimeConfig config = new EnsimeConfig(project.getBasedir(), cacheDir,
-      getScalaJars(), getEnsimeServerJars(), ENSIME_SERVER_VERSION, project.getName(),
-      getScalaVersion(),
-      ensimeSuggestedOptions(), modules, getJavaHome(),
-      getEnsimeJavaFlags(), getJavacOptions(project),
-      javaSrc, subProjects);
+        getScalaJars(), getEnsimeServerJars(), ENSIME_SERVER_VERSION, project.getName(),
+        getScalaVersion(),
+        ensimeSuggestedOptions(), modules, getJavaHome(),
+        getEnsimeJavaFlags(), getJavacOptions(project),
+        javaSrc, subProjects);
+    return config;
+  }
 
-    write(SExpFormatter.toSExp(config).replaceAll("\r\n", "\n") + "\n", out);
+  /**
+   * Generates configurations.
+   */
+  public void generate(final File out) {
+    write(SExpFormatter.toSExp(generateConfig()).replaceAll("\r\n", "\n") + "\n", out);
   }
 
 
