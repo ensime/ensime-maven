@@ -685,7 +685,7 @@ final public class EnsimeConfigGenerator {
     } catch(IOException ioex) {}
   }
 
-  public EnsimeConfig generateConfig() {
+  protected EnsimeConfig generateConfig() {
     String projectDir = project.getBasedir().toPath().toAbsolutePath().toString();
 
     File cacheDir = new File(projectDir + SP + ".ensime_cache");
