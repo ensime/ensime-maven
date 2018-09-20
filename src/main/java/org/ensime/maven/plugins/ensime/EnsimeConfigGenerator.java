@@ -174,13 +174,20 @@ final public class EnsimeConfigGenerator {
     Optional<File> possibleJDK = possibleJDKs.flatMap( n -> {
       File f = new File(n + "/lib/tools.jar");
       if (f.exists())
-        return Stream.of(new File(n));
-      else return Stream.empty();
+          return Stream.of(new File(n));
+      // JDK 9+ has classlist but not tools.jar
+      else {
+          f = new File(n + "/lib/classlist");
+          if (f.exists())
+              return Stream.of(new File(n));
+          else
+              return Stream.empty();
+      }
     }).findFirst();
 
     if(!possibleJDK.isPresent()) {
       System.err.println(
-        "Could not automatically find the JDK/lib/tools.jar.\n" +
+        "Could not automatically find the JDK/lib/tools.jar (Java 1-8) or JDK/lib/classlist (Java 9+).\n" +
         "You must explicitly set JDK_HOME or JAVA_HOME.");
       System.exit(1);
     }
